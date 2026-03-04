@@ -52,45 +52,42 @@ class TickDataset(Dataset):
         self.confidences: list[float] = []
 
         conn = get_connection()
-        try:
-            for symbol in symbols:
-                df = conn.execute(
-                    """
-                    SELECT price, volume, bid, ask, timestamp
-                    FROM ticks
-                    WHERE symbol = ?
-                    ORDER BY timestamp ASC
-                    """,
-                    [symbol],
-                ).fetchdf()
+        for symbol in symbols:
+            df = conn.execute(
+                """
+                SELECT price, volume, bid, ask, timestamp
+                FROM ticks
+                WHERE symbol = ?
+                ORDER BY timestamp ASC
+                """,
+                [symbol],
+            ).fetchdf()
 
-                if len(df) < window_size + horizon:
+            if len(df) < window_size + horizon:
+                continue
+
+            vec = build_feature_vector(df)
+            if vec is None:
+                continue
+
+            prices = df["price"].values
+
+            # Slide a window across the data
+            for i in range(len(vec) - window_size - horizon + 1):
+                window = vec[i : i + window_size]
+                future_price = prices[i + window_size + horizon - 1]
+                current_price = prices[i + window_size - 1]
+
+                if current_price == 0:
                     continue
 
-                vec = build_feature_vector(df)
-                if vec is None:
-                    continue
+                ret = (future_price - current_price) / current_price
+                direction = 1 if ret > 0 else 0
+                confidence = min(abs(ret) * 100, 1.0)  # scale small returns
 
-                prices = df["price"].values
-
-                # Slide a window across the data
-                for i in range(len(vec) - window_size - horizon + 1):
-                    window = vec[i : i + window_size]
-                    future_price = prices[i + window_size + horizon - 1]
-                    current_price = prices[i + window_size - 1]
-
-                    if current_price == 0:
-                        continue
-
-                    ret = (future_price - current_price) / current_price
-                    direction = 1 if ret > 0 else 0
-                    confidence = min(abs(ret) * 100, 1.0)  # scale small returns
-
-                    self.windows.append(window)
-                    self.directions.append(direction)
-                    self.confidences.append(confidence)
-        finally:
-            conn.close()
+                self.windows.append(window)
+                self.directions.append(direction)
+                self.confidences.append(confidence)
 
         logger.info("Built dataset with %d samples", len(self.windows))
 

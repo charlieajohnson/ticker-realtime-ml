@@ -40,16 +40,13 @@ async def model_stats():
 
     # Count today's predictions
     conn = get_connection()
-    try:
-        row = conn.execute(
-            """
-            SELECT COUNT(*) FROM predictions
-            WHERE created_at >= CURRENT_DATE
-            """
-        ).fetchone()
-        predictions_today = row[0] if row else 0
-    finally:
-        conn.close()
+    row = conn.execute(
+        """
+        SELECT COUNT(*) FROM predictions
+        WHERE created_at >= CURRENT_DATE
+        """
+    ).fetchone()
+    predictions_today = row[0] if row else 0
 
     return {
         "name": f"TickerNet {model_version}",

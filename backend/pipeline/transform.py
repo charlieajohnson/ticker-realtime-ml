@@ -63,19 +63,16 @@ def get_recent_ticks(symbol: str, limit: int = 100) -> pd.DataFrame:
     Returns a DataFrame sorted by timestamp ascending (oldest first).
     """
     conn = get_connection()
-    try:
-        df = conn.execute(
-            """
-            SELECT symbol, price, volume, bid, ask, timestamp
-            FROM ticks
-            WHERE symbol = ?
-            ORDER BY timestamp DESC
-            LIMIT ?
-            """,
-            [symbol, limit],
-        ).fetchdf()
-    finally:
-        conn.close()
+    df = conn.execute(
+        """
+        SELECT symbol, price, volume, bid, ask, timestamp
+        FROM ticks
+        WHERE symbol = ?
+        ORDER BY timestamp DESC
+        LIMIT ?
+        """,
+        [symbol, limit],
+    ).fetchdf()
 
     if df.empty:
         return df

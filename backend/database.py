@@ -1,6 +1,10 @@
-"""DuckDB connection and table initialization."""
+"""DuckDB connection and table initialization.
 
-import os
+Uses a thread-safe singleton connection to avoid the overhead and
+write-conflict issues of opening/closing connections on every call.
+"""
+
+import threading
 from pathlib import Path
 
 import duckdb
@@ -74,18 +78,40 @@ CREATE TABLE IF NOT EXISTS pipeline_metrics (
 );
 """
 
+_conn: duckdb.DuckDBPyConnection | None = None
+_lock = threading.Lock()
+
 
 def get_connection() -> duckdb.DuckDBPyConnection:
-    settings = get_settings()
-    db_path = settings.duckdb_path
-    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    return duckdb.connect(db_path)
+    """Return the singleton DuckDB connection, creating it on first call."""
+    global _conn
+    with _lock:
+        if _conn is None:
+            settings = get_settings()
+            db_path = settings.duckdb_path
+            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+            _conn = duckdb.connect(db_path)
+        return _conn
+
+
+def close_connection() -> None:
+    """Close the singleton connection (call during app shutdown)."""
+    global _conn
+    with _lock:
+        if _conn is not None:
+            _conn.close()
+            _conn = None
+
+
+def reset_connection() -> None:
+    """Close and discard the singleton so a new path can be used (for tests)."""
+    close_connection()
 
 
 def init_tables() -> None:
+    """Create all tables if they don't exist."""
     conn = get_connection()
     for statement in _TABLES_SQL.strip().split(";"):
         statement = statement.strip()
         if statement:
             conn.execute(statement)
-    conn.close()
