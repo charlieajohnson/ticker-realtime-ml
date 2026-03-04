@@ -1,6 +1,3 @@
-# ticker-realtime-ml
-Real-time financial data pipeline with ML inference. Ingests live market data, engineers features (SMA, RSI, VWAP), runs an LSTM+Attention model for short-term price prediction, and serves predictions via WebSocket to a terminal-inspired React dashboard. Built with FastAPI, PyTorch, DuckDB, and Docker.
-
 # Ticker
 
 **Real-time financial data pipeline with ML inference.**
@@ -15,22 +12,13 @@ Ticker ingests live market data, engineers features from the stream, runs a ligh
 
 ---
 
-## Demo
-
-<!-- Replace with actual screenshot -->
-> ![Dashboard Screenshot](docs/screenshot.png)
->
-> *The Ticker dashboard showing live prices, sparklines, model predictions, pipeline health, and signal feed.*
-
----
-
 ## Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  Data Sources (Alpha Vantage / Polygon.io / Finnhub)            │
+│  Data Sources (Synthetic / Alpha Vantage)                        │
 └──────────┬───────────────────────────────────────────────────────┘
-           │  REST poll (1s) or WebSocket stream
+           │  REST poll (1s) or synthetic GBM generator
            ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │  Pipeline                                                        │
@@ -96,7 +84,7 @@ Ticker ingests live market data, engineers features from the stream, runs a ligh
 | API | FastAPI, WebSockets, uvicorn |
 | ML | PyTorch (LSTM + Attention) |
 | Data | DuckDB, pandas, NumPy |
-| Data Source | Alpha Vantage / Polygon.io / Finnhub |
+| Data Source | Synthetic (default) / Alpha Vantage |
 | Frontend | React, Vite |
 | Infra | Docker, docker-compose |
 
@@ -109,13 +97,17 @@ ticker/
 ├── backend/
 │   ├── main.py                  # FastAPI app, WebSocket manager, lifespan
 │   ├── config.py                # Settings via pydantic-settings
-│   ├── database.py              # DuckDB connection + table init
+│   ├── database.py              # DuckDB singleton connection + table init
 │   ├── pipeline/
 │   │   ├── ingest.py            # Async market data fetcher
 │   │   ├── transform.py         # Tick cleaning, normalization
 │   │   ├── features.py          # Feature engineering (SMA, RSI, VWAP, etc.)
 │   │   ├── inference.py         # Load model, run predictions
-│   │   └── orchestrator.py      # Pipeline coordinator
+│   │   ├── orchestrator.py      # Pipeline coordinator
+│   │   └── providers/           # Data source adapters
+│   │       ├── base.py          # Abstract Provider interface
+│   │       ├── synthetic.py     # GBM random walk (default)
+│   │       └── alpha_vantage.py # Alpha Vantage REST adapter
 │   ├── models/
 │   │   ├── tickernet.py         # PyTorch model definition
 │   │   ├── train.py             # Training script
@@ -135,6 +127,7 @@ ticker/
 │       ├── api.js               # REST fetch wrappers
 │       ├── ws.js                # WebSocket client with reconnect
 │       └── components/          # TopBar, StockTable, Sparkline, ModelCard, etc.
+├── docs/                        # Project spec and UI reference
 ├── tests/
 ├── Dockerfile
 ├── docker-compose.yml
@@ -190,6 +183,15 @@ docker-compose up --build
 ```
 
 The app will be available at [http://localhost:8000](http://localhost:8000).
+
+### Using Real Market Data
+
+To use Alpha Vantage instead of synthetic data, set the following in `.env`:
+
+```env
+API_PROVIDER=alpha_vantage
+ALPHA_VANTAGE_API_KEY=your_key_here
+```
 
 ### Train the Model
 
