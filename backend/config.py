@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Data provider
-    api_provider: str = "alpha_vantage"
+    api_provider: str = "synthetic"
     alpha_vantage_api_key: Optional[str] = None
     polygon_api_key: Optional[str] = None
     finnhub_api_key: Optional[str] = None

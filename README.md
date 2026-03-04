@@ -150,18 +150,17 @@ ticker/
 - Python 3.12+
 - Node.js 18+
 - Docker (optional)
-- API key from [Alpha Vantage](https://www.alphavantage.co/), [Polygon.io](https://polygon.io/), or [Finnhub](https://finnhub.io/)
+- API key (optional) — the project runs with synthetic data by default
 
 ### Setup
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/ticker.git
-cd ticker
+git clone https://github.com/charlieajohnson/ticker-realtime-ml.git
+cd ticker-realtime-ml
 
 # Configure environment
 cp .env.example .env
-# Edit .env and add your market data API key
 
 # Install backend dependencies
 pip install -e .
@@ -169,6 +168,8 @@ pip install -e .
 # Install frontend dependencies
 cd frontend && npm install && cd ..
 ```
+
+> **Note:** No API key is needed for the default setup. The synthetic data provider generates realistic tick data using geometric Brownian motion so the full pipeline runs out of the box.
 
 ### Run (Development)
 
