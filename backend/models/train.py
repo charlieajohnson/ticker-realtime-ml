@@ -20,7 +20,7 @@ from torch.utils.data import Dataset, DataLoader
 from backend.config import get_settings
 from backend.database import get_connection
 from backend.models.tickernet import TickerNet
-from backend.pipeline.features import build_feature_vector
+from backend.pipeline.features import build_feature_vector, MIN_TICKS
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +72,8 @@ class TickDataset(Dataset):
 
             prices = df["price"].values
 
-            # Slide a window across the data
-            for i in range(len(vec) - window_size - horizon + 1):
+            # Slide a window across the data, skipping warm-up rows
+            for i in range(MIN_TICKS, len(vec) - window_size - horizon + 1):
                 window = vec[i : i + window_size]
                 future_price = prices[i + window_size + horizon - 1]
                 current_price = prices[i + window_size - 1]
