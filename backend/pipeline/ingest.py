@@ -65,24 +65,21 @@ def store_tick(tick: dict) -> str:
     """Insert a single tick into DuckDB. Returns the tick ID."""
     tick_id = str(uuid.uuid4())
     conn = get_connection()
-    try:
-        conn.execute(
-            """
-            INSERT INTO ticks (id, symbol, price, volume, bid, ask, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                tick_id,
-                tick["symbol"],
-                tick["price"],
-                tick["volume"],
-                tick.get("bid"),
-                tick.get("ask"),
-                tick.get("timestamp") or datetime.now(timezone.utc).isoformat(),
-            ],
-        )
-    finally:
-        conn.close()
+    conn.execute(
+        """
+        INSERT INTO ticks (id, symbol, price, volume, bid, ask, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            tick_id,
+            tick["symbol"],
+            tick["price"],
+            tick["volume"],
+            tick.get("bid"),
+            tick.get("ask"),
+            tick.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+        ],
+    )
     return tick_id
 
 
@@ -95,18 +92,13 @@ async def ingest_cycle(
     session: aiohttp.ClientSession,
     symbols: list[str],
 ) -> list[dict]:
-    """Run one full ingest round: fetch + store for all symbols.
+    """Run one full ingest round: fetch quotes for all symbols.
 
-    Returns the list of successfully stored ticks.
+    Returns raw quotes (not yet stored — caller should clean then store).
     """
-    stored: list[dict] = []
+    quotes: list[dict] = []
     for symbol in symbols:
         quote = await fetch_quote(session, symbol)
-        if quote is None:
-            continue
-        try:
-            store_tick(quote)
-            stored.append(quote)
-        except Exception:
-            logger.exception("Failed to store tick for %s", symbol)
-    return stored
+        if quote is not None:
+            quotes.append(quote)
+    return quotes
