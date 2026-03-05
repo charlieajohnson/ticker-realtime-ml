@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     symbols: str = "AAPL,GOOGL,MSFT,AMZN,NVDA,TSLA,META,JPM"
 
     # Pipeline
-    ingest_interval_s: float = 1.0
+    ingest_interval_s: float = 10.0
     feature_window_size: int = 60
     inference_interval_s: float = 5.0
 

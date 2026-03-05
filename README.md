@@ -16,9 +16,9 @@ Ticker ingests live market data, engineers features from the stream, runs a ligh
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  Data Sources (Synthetic / Alpha Vantage)                        │
+│  Data Sources (Synthetic / Finnhub / Alpha Vantage)              │
 └──────────┬───────────────────────────────────────────────────────┘
-           │  REST poll (1s) or synthetic GBM generator
+           │  REST poll (10s) or synthetic GBM generator
            ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │  Pipeline                                                        │
@@ -84,7 +84,7 @@ Ticker ingests live market data, engineers features from the stream, runs a ligh
 | API | FastAPI, WebSockets, uvicorn |
 | ML | PyTorch (LSTM + Attention) |
 | Data | DuckDB, pandas, NumPy |
-| Data Source | Synthetic (default) / Alpha Vantage |
+| Data Source | Synthetic (default) / Finnhub / Alpha Vantage |
 | Frontend | React, Vite |
 | Infra | Docker, docker-compose |
 
@@ -107,7 +107,8 @@ ticker/
 │   │   └── providers/           # Data source adapters
 │   │       ├── base.py          # Abstract Provider interface
 │   │       ├── synthetic.py     # GBM random walk (default)
-│   │       └── alpha_vantage.py # Alpha Vantage REST adapter
+│   │       ├── alpha_vantage.py # Alpha Vantage REST adapter
+│   │       └── finnhub.py      # Finnhub REST adapter
 │   ├── models/
 │   │   ├── tickernet.py         # PyTorch model definition
 │   │   ├── train.py             # Training script
@@ -186,12 +187,33 @@ The app will be available at [http://localhost:8000](http://localhost:8000).
 
 ### Using Real Market Data
 
-To use Alpha Vantage instead of synthetic data, set the following in `.env`:
+To use Finnhub (recommended, 60 calls/min free tier):
+
+```env
+API_PROVIDER=finnhub
+FINNHUB_API_KEY=your_key_here
+INGEST_INTERVAL_S=10
+```
+
+Or Alpha Vantage (25 calls/day free tier):
 
 ```env
 API_PROVIDER=alpha_vantage
 ALPHA_VANTAGE_API_KEY=your_key_here
 ```
+
+### Deploying to Render
+
+The project includes `requirements-render.txt` for CPU-only PyTorch (~200MB instead of ~2GB).
+
+**Web Service settings:**
+- **Build Command:** `pip install -r requirements-render.txt && pip install .`
+- **Start Command:** `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
+- **Environment Variables:** `API_PROVIDER=finnhub`, `FINNHUB_API_KEY=<key>`, `DUCKDB_PATH=data/ticker.db`, `INGEST_INTERVAL_S=10`, `SYMBOLS=AAPL,GOOGL,MSFT,NVDA`
+
+Or deploy with Docker (serves frontend from FastAPI StaticFiles mount):
+- **Environment:** Docker
+- **Dockerfile Path:** `./Dockerfile`
 
 ### Train the Model
 

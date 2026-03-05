@@ -15,6 +15,7 @@ from backend.database import get_connection
 from backend.pipeline.providers.base import Provider
 from backend.pipeline.providers.synthetic import SyntheticProvider
 from backend.pipeline.providers.alpha_vantage import AlphaVantageProvider
+from backend.pipeline.providers.finnhub import FinnhubProvider
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,13 @@ def _get_provider() -> Provider:
             _provider = SyntheticProvider()
         else:
             _provider = AlphaVantageProvider(api_key)
+    elif name == "finnhub":
+        api_key = settings.finnhub_api_key
+        if not api_key:
+            logger.warning("FINNHUB_API_KEY not set — falling back to synthetic")
+            _provider = SyntheticProvider()
+        else:
+            _provider = FinnhubProvider(api_key)
     else:
         logger.error("Unknown API provider '%s' — falling back to synthetic", name)
         _provider = SyntheticProvider()

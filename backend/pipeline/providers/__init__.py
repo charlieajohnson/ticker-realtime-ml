@@ -3,5 +3,6 @@
 from backend.pipeline.providers.base import Provider
 from backend.pipeline.providers.synthetic import SyntheticProvider
 from backend.pipeline.providers.alpha_vantage import AlphaVantageProvider
+from backend.pipeline.providers.finnhub import FinnhubProvider
 
-__all__ = ["Provider", "SyntheticProvider", "AlphaVantageProvider"]
+__all__ = ["Provider", "SyntheticProvider", "AlphaVantageProvider", "FinnhubProvider"]
