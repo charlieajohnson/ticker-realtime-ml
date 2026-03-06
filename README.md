@@ -1,6 +1,3 @@
-# ticker-realtime-ml
-Real-time financial data pipeline with ML inference. Ingests live market data, engineers features (SMA, RSI, VWAP), runs an LSTM+Attention model for short-term price prediction, and serves predictions via WebSocket to a terminal-inspired React dashboard. Built with FastAPI, PyTorch, DuckDB, and Docker.
-
 # Ticker
 
 **Real-time financial data pipeline with ML inference.**
@@ -15,22 +12,13 @@ Ticker ingests live market data, engineers features from the stream, runs a ligh
 
 ---
 
-## Demo
-
-<!-- Replace with actual screenshot -->
-> ![Dashboard Screenshot](docs/screenshot.png)
->
-> *The Ticker dashboard showing live prices, sparklines, model predictions, pipeline health, and signal feed.*
-
----
-
 ## Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  Data Sources (Alpha Vantage / Polygon.io / Finnhub)            │
+│  Data Sources (Synthetic / Finnhub / Alpha Vantage)              │
 └──────────┬───────────────────────────────────────────────────────┘
-           │  REST poll (1s) or WebSocket stream
+           │  REST poll (10s) or synthetic GBM generator
            ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │  Pipeline                                                        │
@@ -96,7 +84,7 @@ Ticker ingests live market data, engineers features from the stream, runs a ligh
 | API | FastAPI, WebSockets, uvicorn |
 | ML | PyTorch (LSTM + Attention) |
 | Data | DuckDB, pandas, NumPy |
-| Data Source | Alpha Vantage / Polygon.io / Finnhub |
+| Data Source | Synthetic (default) / Finnhub / Alpha Vantage |
 | Frontend | React, Vite |
 | Infra | Docker, docker-compose |
 
@@ -109,13 +97,18 @@ ticker/
 ├── backend/
 │   ├── main.py                  # FastAPI app, WebSocket manager, lifespan
 │   ├── config.py                # Settings via pydantic-settings
-│   ├── database.py              # DuckDB connection + table init
+│   ├── database.py              # DuckDB singleton connection + table init
 │   ├── pipeline/
 │   │   ├── ingest.py            # Async market data fetcher
 │   │   ├── transform.py         # Tick cleaning, normalization
 │   │   ├── features.py          # Feature engineering (SMA, RSI, VWAP, etc.)
 │   │   ├── inference.py         # Load model, run predictions
-│   │   └── orchestrator.py      # Pipeline coordinator
+│   │   ├── orchestrator.py      # Pipeline coordinator
+│   │   └── providers/           # Data source adapters
+│   │       ├── base.py          # Abstract Provider interface
+│   │       ├── synthetic.py     # GBM random walk (default)
+│   │       ├── alpha_vantage.py # Alpha Vantage REST adapter
+│   │       └── finnhub.py      # Finnhub REST adapter
 │   ├── models/
 │   │   ├── tickernet.py         # PyTorch model definition
 │   │   ├── train.py             # Training script
@@ -135,6 +128,7 @@ ticker/
 │       ├── api.js               # REST fetch wrappers
 │       ├── ws.js                # WebSocket client with reconnect
 │       └── components/          # TopBar, StockTable, Sparkline, ModelCard, etc.
+├── docs/                        # Project spec and UI reference
 ├── tests/
 ├── Dockerfile
 ├── docker-compose.yml
@@ -150,18 +144,17 @@ ticker/
 - Python 3.12+
 - Node.js 18+
 - Docker (optional)
-- API key from [Alpha Vantage](https://www.alphavantage.co/), [Polygon.io](https://polygon.io/), or [Finnhub](https://finnhub.io/)
+- API key (optional) — the project runs with synthetic data by default
 
 ### Setup
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/ticker.git
-cd ticker
+git clone https://github.com/charlieajohnson/ticker-realtime-ml.git
+cd ticker-realtime-ml
 
 # Configure environment
 cp .env.example .env
-# Edit .env and add your market data API key
 
 # Install backend dependencies
 pip install -e .
@@ -169,6 +162,8 @@ pip install -e .
 # Install frontend dependencies
 cd frontend && npm install && cd ..
 ```
+
+> **Note:** No API key is needed for the default setup. The synthetic data provider generates realistic tick data using geometric Brownian motion so the full pipeline runs out of the box.
 
 ### Run (Development)
 
@@ -189,6 +184,36 @@ docker-compose up --build
 ```
 
 The app will be available at [http://localhost:8000](http://localhost:8000).
+
+### Using Real Market Data
+
+To use Finnhub (recommended, 60 calls/min free tier):
+
+```env
+API_PROVIDER=finnhub
+FINNHUB_API_KEY=your_key_here
+INGEST_INTERVAL_S=10
+```
+
+Or Alpha Vantage (25 calls/day free tier):
+
+```env
+API_PROVIDER=alpha_vantage
+ALPHA_VANTAGE_API_KEY=your_key_here
+```
+
+### Deploying to Render
+
+The project includes `requirements-render.txt` for CPU-only PyTorch (~200MB instead of ~2GB).
+
+**Web Service settings:**
+- **Build Command:** `pip install -r requirements-render.txt && pip install .`
+- **Start Command:** `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
+- **Environment Variables:** `API_PROVIDER=finnhub`, `FINNHUB_API_KEY=<key>`, `DUCKDB_PATH=data/ticker.db`, `INGEST_INTERVAL_S=10`, `SYMBOLS=AAPL,GOOGL,MSFT,NVDA`
+
+Or deploy with Docker (serves frontend from FastAPI StaticFiles mount):
+- **Environment:** Docker
+- **Dockerfile Path:** `./Dockerfile`
 
 ### Train the Model
 

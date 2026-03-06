@@ -1,5 +1,6 @@
 """GET /api/model/stats endpoint."""
 
+import math
 from pathlib import Path
 
 import torch
@@ -40,16 +41,55 @@ async def model_stats():
 
     # Count today's predictions
     conn = get_connection()
-    try:
-        row = conn.execute(
-            """
-            SELECT COUNT(*) FROM predictions
-            WHERE created_at >= CURRENT_DATE
-            """
-        ).fetchone()
-        predictions_today = row[0] if row else 0
-    finally:
-        conn.close()
+    row = conn.execute(
+        """
+        SELECT COUNT(*) FROM predictions
+        WHERE created_at >= CURRENT_DATE
+        """
+    ).fetchone()
+    predictions_today = row[0] if row else 0
+
+    # Compute Sharpe ratio and max drawdown from resolved predictions
+    sharpe = None
+    max_drawdown = None
+
+    outcomes = conn.execute(
+        """
+        SELECT p.direction, p.price_at,
+               (SELECT t.price FROM ticks t
+                WHERE t.symbol = p.symbol
+                  AND t.timestamp >= p.created_at + INTERVAL (p.horizon_s) SECOND
+                ORDER BY t.timestamp ASC LIMIT 1) AS outcome_price
+        FROM predictions p
+        WHERE p.created_at >= CURRENT_DATE
+        """
+    ).fetchall()
+
+    returns = []
+    for direction, price_at, outcome_price in outcomes:
+        if outcome_price is None or price_at == 0:
+            continue
+        ret = (outcome_price - price_at) / price_at
+        sign = 1.0 if direction == "LONG" else -1.0
+        returns.append(ret * sign)
+
+    if len(returns) >= 30:
+        mean_r = sum(returns) / len(returns)
+        std_r = math.sqrt(sum((r - mean_r) ** 2 for r in returns) / len(returns))
+        sharpe = round(mean_r / std_r * math.sqrt(len(returns)), 3) if std_r > 0 else None
+
+        # Max drawdown from cumulative returns
+        cumulative = 0.0
+        peak = 0.0
+        worst_dd = 0.0
+        for r in returns:
+            cumulative += r
+            if cumulative > peak:
+                peak = cumulative
+            dd = peak - cumulative
+            if dd > worst_dd:
+                worst_dd = dd
+        max_drawdown = round(-worst_dd, 4)
 
     return {
         "name": f"TickerNet {model_version}",
@@ -60,4 +100,6 @@ async def model_stats():
         "epoch": epoch,
         "predictions_today": predictions_today,
         "last_trained": last_trained,
+        "sharpe": sharpe,
+        "max_drawdown": max_drawdown,
     }

@@ -1,7 +1,7 @@
-"""Async market data fetcher (aiohttp).
+"""Async market data fetcher.
 
-Supports Alpha Vantage (default), with a provider abstraction
-for easy swapping to Polygon or Finnhub.
+Dispatches to a configured provider (synthetic by default, Alpha Vantage
+for real data) and stores validated ticks in DuckDB.
 """
 
 import logging
@@ -12,59 +12,47 @@ import aiohttp
 
 from backend.config import get_settings
 from backend.database import get_connection
+from backend.pipeline.providers.base import Provider
+from backend.pipeline.providers.synthetic import SyntheticProvider
+from backend.pipeline.providers.alpha_vantage import AlphaVantageProvider
+from backend.pipeline.providers.finnhub import FinnhubProvider
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Alpha Vantage provider
-# ---------------------------------------------------------------------------
-
-_AV_BASE = "https://www.alphavantage.co/query"
+# Singleton provider instance (created on first use)
+_provider: Provider | None = None
 
 
-async def _fetch_alpha_vantage(
-    session: aiohttp.ClientSession,
-    symbol: str,
-    api_key: str,
-) -> dict | None:
-    """Fetch a single quote from Alpha Vantage GLOBAL_QUOTE endpoint."""
-    params = {
-        "function": "GLOBAL_QUOTE",
-        "symbol": symbol,
-        "apikey": api_key,
-    }
-    try:
-        async with session.get(_AV_BASE, params=params) as resp:
-            if resp.status != 200:
-                logger.warning("Alpha Vantage %s HTTP %s", symbol, resp.status)
-                return None
-            data = await resp.json(content_type=None)
+def _get_provider() -> Provider:
+    """Return the configured provider, creating it on first call."""
+    global _provider
+    if _provider is not None:
+        return _provider
 
-        quote = data.get("Global Quote", {})
-        if not quote or "05. price" not in quote:
-            note = data.get("Note") or data.get("Information") or ""
-            if note:
-                logger.warning("Alpha Vantage rate limit: %s", note)
-            else:
-                logger.warning("Empty quote for %s", symbol)
-            return None
+    settings = get_settings()
+    name = settings.api_provider
 
-        return {
-            "symbol": symbol,
-            "price": float(quote["05. price"]),
-            "volume": int(quote["06. volume"]),
-            "bid": None,
-            "ask": None,
-            "timestamp": quote.get("07. latest trading day", ""),
-        }
-    except Exception:
-        logger.exception("Error fetching %s from Alpha Vantage", symbol)
-        return None
+    if name == "synthetic":
+        _provider = SyntheticProvider()
+    elif name == "alpha_vantage":
+        api_key = settings.alpha_vantage_api_key
+        if not api_key:
+            logger.warning("ALPHA_VANTAGE_API_KEY not set — falling back to synthetic")
+            _provider = SyntheticProvider()
+        else:
+            _provider = AlphaVantageProvider(api_key)
+    elif name == "finnhub":
+        api_key = settings.finnhub_api_key
+        if not api_key:
+            logger.warning("FINNHUB_API_KEY not set — falling back to synthetic")
+            _provider = SyntheticProvider()
+        else:
+            _provider = FinnhubProvider(api_key)
+    else:
+        logger.error("Unknown API provider '%s' — falling back to synthetic", name)
+        _provider = SyntheticProvider()
 
-
-# ---------------------------------------------------------------------------
-# Provider dispatch
-# ---------------------------------------------------------------------------
+    return _provider
 
 
 async def fetch_quote(
@@ -72,18 +60,8 @@ async def fetch_quote(
     symbol: str,
 ) -> dict | None:
     """Fetch a single quote using the configured provider."""
-    settings = get_settings()
-    provider = settings.api_provider
-
-    if provider == "alpha_vantage":
-        api_key = settings.alpha_vantage_api_key
-        if not api_key:
-            logger.warning("ALPHA_VANTAGE_API_KEY not set — skipping ingest")
-            return None
-        return await _fetch_alpha_vantage(session, symbol, api_key)
-
-    logger.error("Unknown API provider: %s", provider)
-    return None
+    provider = _get_provider()
+    return await provider.fetch(session, symbol)
 
 
 # ---------------------------------------------------------------------------
@@ -95,24 +73,21 @@ def store_tick(tick: dict) -> str:
     """Insert a single tick into DuckDB. Returns the tick ID."""
     tick_id = str(uuid.uuid4())
     conn = get_connection()
-    try:
-        conn.execute(
-            """
-            INSERT INTO ticks (id, symbol, price, volume, bid, ask, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                tick_id,
-                tick["symbol"],
-                tick["price"],
-                tick["volume"],
-                tick.get("bid"),
-                tick.get("ask"),
-                tick.get("timestamp") or datetime.now(timezone.utc).isoformat(),
-            ],
-        )
-    finally:
-        conn.close()
+    conn.execute(
+        """
+        INSERT INTO ticks (id, symbol, price, volume, bid, ask, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            tick_id,
+            tick["symbol"],
+            tick["price"],
+            tick["volume"],
+            tick.get("bid"),
+            tick.get("ask"),
+            tick.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+        ],
+    )
     return tick_id
 
 
@@ -125,18 +100,13 @@ async def ingest_cycle(
     session: aiohttp.ClientSession,
     symbols: list[str],
 ) -> list[dict]:
-    """Run one full ingest round: fetch + store for all symbols.
+    """Run one full ingest round: fetch quotes for all symbols.
 
-    Returns the list of successfully stored ticks.
+    Returns raw quotes (not yet stored — caller should clean then store).
     """
-    stored: list[dict] = []
+    quotes: list[dict] = []
     for symbol in symbols:
         quote = await fetch_quote(session, symbol)
-        if quote is None:
-            continue
-        try:
-            store_tick(quote)
-            stored.append(quote)
-        except Exception:
-            logger.exception("Failed to store tick for %s", symbol)
-    return stored
+        if quote is not None:
+            quotes.append(quote)
+    return quotes

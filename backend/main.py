@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import get_settings
-from backend.database import init_tables
+from backend.database import init_tables, close_connection
 from backend.pipeline.orchestrator import PipelineOrchestrator
 from backend.services.alert_engine import AlertEngine
 from backend.services.stream_manager import StreamManager
@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
     yield
 
     await orchestrator.stop()
+    close_connection()
     logging.info("Ticker pipeline shutting down")
 
 

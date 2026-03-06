@@ -99,25 +99,22 @@ def store_prediction(
     """Insert a prediction row into DuckDB. Returns the prediction ID."""
     pred_id = str(uuid.uuid4())
     conn = get_connection()
-    try:
-        conn.execute(
-            """
-            INSERT INTO predictions
-                (id, symbol, direction, confidence, price_at,
-                 horizon_s, model_version, features_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                pred_id,
-                symbol,
-                prediction["direction"],
-                prediction["confidence"],
-                price_at,
-                horizon_s,
-                prediction["model_version"],
-                features_id,
-            ],
-        )
-    finally:
-        conn.close()
+    conn.execute(
+        """
+        INSERT INTO predictions
+            (id, symbol, direction, confidence, price_at,
+             horizon_s, model_version, features_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            pred_id,
+            symbol,
+            prediction["direction"],
+            prediction["confidence"],
+            price_at,
+            horizon_s,
+            prediction["model_version"],
+            features_id,
+        ],
+    )
     return pred_id

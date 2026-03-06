@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Data provider
-    api_provider: str = "alpha_vantage"
+    api_provider: str = "synthetic"
     alpha_vantage_api_key: Optional[str] = None
     polygon_api_key: Optional[str] = None
     finnhub_api_key: Optional[str] = None
@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     symbols: str = "AAPL,GOOGL,MSFT,AMZN,NVDA,TSLA,META,JPM"
 
     # Pipeline
-    ingest_interval_s: float = 1.0
+    ingest_interval_s: float = 10.0
     feature_window_size: int = 60
     inference_interval_s: float = 5.0
 

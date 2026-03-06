@@ -211,28 +211,25 @@ def store_features(symbol: str, feats: dict) -> str:
     """Insert a feature row into DuckDB. Returns the feature ID."""
     feat_id = str(uuid.uuid4())
     conn = get_connection()
-    try:
-        conn.execute(
-            """
-            INSERT INTO features
-                (id, symbol, window_end, sma_20, ema_12, rsi_14,
-                 volatility, vwap, momentum, volume_zscore, spread)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                feat_id,
-                symbol,
-                datetime.now(timezone.utc),
-                feats["sma_20"],
-                feats["ema_12"],
-                feats["rsi_14"],
-                feats["volatility"],
-                feats["vwap"],
-                feats["momentum"],
-                feats["volume_zscore"],
-                feats["spread"],
-            ],
-        )
-    finally:
-        conn.close()
+    conn.execute(
+        """
+        INSERT INTO features
+            (id, symbol, window_end, sma_20, ema_12, rsi_14,
+             volatility, vwap, momentum, volume_zscore, spread)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            feat_id,
+            symbol,
+            datetime.now(timezone.utc),
+            feats["sma_20"],
+            feats["ema_12"],
+            feats["rsi_14"],
+            feats["volatility"],
+            feats["vwap"],
+            feats["momentum"],
+            feats["volume_zscore"],
+            feats["spread"],
+        ],
+    )
     return feat_id

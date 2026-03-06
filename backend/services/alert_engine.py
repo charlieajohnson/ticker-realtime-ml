@@ -88,21 +88,18 @@ def store_alert(alert: dict) -> str:
     """Insert an alert into DuckDB. Returns the alert ID."""
     alert_id = str(uuid.uuid4())
     conn = get_connection()
-    try:
-        conn.execute(
-            """
-            INSERT INTO alerts (id, type, symbol, message, severity, metadata)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            [
-                alert_id,
-                alert["type"],
-                alert.get("symbol"),
-                alert["message"],
-                alert.get("severity", "info"),
-                alert.get("metadata"),
-            ],
-        )
-    finally:
-        conn.close()
+    conn.execute(
+        """
+        INSERT INTO alerts (id, type, symbol, message, severity, metadata)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        [
+            alert_id,
+            alert["type"],
+            alert.get("symbol"),
+            alert["message"],
+            alert.get("severity", "info"),
+            alert.get("metadata"),
+        ],
+    )
     return alert_id
