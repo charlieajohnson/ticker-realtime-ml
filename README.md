@@ -1,3 +1,5 @@
+https://ticker-realtime-ml-production.up.railway.app
+
 # Ticker
 
 **Real-time financial data pipeline with ML inference.**
