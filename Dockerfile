@@ -10,6 +10,9 @@ RUN npm run build
 FROM python:3.12-slim
 WORKDIR /app
 
+# Install CPU-only PyTorch first (~200MB instead of ~2GB)
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
 COPY pyproject.toml .
 RUN pip install --no-cache-dir .
 
